@@ -170,40 +170,59 @@ def mine_chunk(args):
 # ==== Старт майнинга ====
 def start_mining():
     print("🚀 Запуск SOLO майнинга (testnet)")
-    prev_hash, bits, height, timestamp = get_latest_block_data()
-    target = bits_to_target(bits)
-    print(f"⛏ Высота: {height} | Bits: {hex(bits)} | Target: {hex(target)}")
+    initial_block_found = False
 
-    coinbase_tx = create_coinbase_transaction(height)
-    transactions = []  # только coinbase
-    merkle_root = compute_merkle_root([coinbase_tx])
-    print(f"🔗 Merkle root: {merkle_root}")
+    while not initial_block_found:
+        try:
+            prev_hash, bits, height, timestamp = get_latest_block_data()
+            target = bits_to_target(bits)
+            print(f"⛏ Высота: {height} | Bits: {hex(bits)} | Target: {hex(target)}")
 
-    num_cores = cpu_count()
-    chunk_size = 500_000
-    start_nonce = 0
-    end_nonce = 0xffffffff
+            coinbase_tx = create_coinbase_transaction(height)
+            transactions = []
+            merkle_root = compute_merkle_root([coinbase_tx])
+            print(f"🔗 Merkle root: {merkle_root}")
 
-    args_list = []
-    for i in range(num_cores):
-        chunk_start = start_nonce + i * chunk_size
-        chunk_end = min(chunk_start + chunk_size, end_nonce)
-        args_list.append((chunk_start, chunk_end, prev_hash, merkle_root, timestamp, bits, target))
+            num_cores = cpu_count()
+            chunk_size = 500_000
+            start_nonce = 0
+            end_nonce = 0xffffffff
 
-    with Pool(processes=num_cores) as pool:
-        results = pool.imap_unordered(mine_chunk, args_list)
-        for result in results:
-            if result:
-                nonce, block_hash, header = result
-                print(f"\n✅ Найден блок!")
-                print(f"Nonce: {nonce}")
-                print(f"Hash: {block_hash}")
-                block_hex = assemble_block(header, coinbase_tx, transactions)
-                with open("found_blocks.log", "a") as log:
-                    log.write(f"{datetime.now()} | nonce={nonce} | hash={block_hash}\n")
-                submit_block(block_hex)
-                return
-    print("❌ Блок не найден в этом проходе.")
+            args_list = []
+            for i in range(num_cores):
+                chunk_start = start_nonce + i * chunk_size
+                chunk_end = min(chunk_start + chunk_size, end_nonce)
+                args_list.append((chunk_start, chunk_end, prev_hash, merkle_root, timestamp, bits, target))
+
+            with Pool(processes=num_cores) as pool:
+                results = pool.imap_unordered(mine_chunk, args_list)
+                for result in results:
+                    if result:
+                        nonce, block_hash, header = result
+                        print(f"\n✅ Найден блок!")
+                        print(f"Nonce: {nonce}")
+                        print(f"Hash: {block_hash}")
+
+                        block_hex = assemble_block(header, coinbase_tx, transactions)
+                        submit_block(block_hex)
+
+                        # Создание файла с найденным блоком
+                        os.makedirs("Test", exist_ok=True)
+                        with open(f"Test/block_{height}.txt", "w") as f:
+                            f.write(f"Block Height: {height}\n")
+                            f.write(f"Nonce: {nonce}\n")
+                            f.write(f"Hash: {block_hash}\n")
+
+                        initial_block_found = True
+                        break
+
+            if not initial_block_found:
+                print("❌ Блок не найден, начинаем новый проход...\n")
+                time.sleep(1)
+
+        except Exception as e:
+            print(f"❗ Ошибка: {e}")
+            time.sleep(5)
 
 # ==== Запуск ====
 if __name__ == "__main__":

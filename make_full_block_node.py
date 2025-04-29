@@ -70,7 +70,8 @@ def compute_merkle_root(transactions):
 # ==== Создание coinbase-транзакции ====
 def create_coinbase_transaction(block_height: int) -> str:
     subsidy = 5000000000  # 50 BTC → для regtest/testnet
-    height_script = struct.pack("<B", block_height).hex()
+    height_script = block_height.to_bytes((block_height.bit_length() + 7) // 8, 'little').hex()
+
     script_sig = f"{len(height_script)//2:02x}{height_script}03ffff001d"
     output_script = "0014d0e6b0f8f7c8e9d8f8c7e6d5f4c3b2a1f0e9d8c7"  # P2WPKH dummy
     tx = (
